@@ -8,7 +8,7 @@
 */
 int myNodeID = 1; // then 2 then 3........
 
-int receivedID = 0; //will hold the id received via the mesh broadcast
+//int receivedID = 0; //will hold the id received via the mesh broadcast
 
 #define   MESH_PREFIX     "whateverYouLike" //change for different or separate network
 #define   MESH_PASSWORD   "somethingSneaky" //set the same for all nodes in one network

@@ -6,14 +6,17 @@
 JSONVar myVar;
 //////////////////////////////////////////////////////////////
 //pin definitions
-#define radarMotionPin 15
+#define radarMotionPin  15
 #define controllerInput 32
-#define dbgLed 33
-#define connectionLed 25
+#define dbgLed          33
+#define connectionLed   25
+#define lampSwitch      4
 
-int onFlag = 0;
+int onFlag       = 0;
+long timecount   = 0;
+int waitduration = 1000; //1 second duration
 
-String lampState;
+String lampState= "OFF";
 
 Scheduler userScheduler; // to control your personal task
 painlessMesh  mesh;
@@ -26,12 +29,14 @@ Task taskSendMessage( TASK_SECOND * 0.1 , TASK_FOREVER, &sendMessage );
 
 void sendMessage() {
     if(onFlag==1){//only send if the radar is on and stays on for a few miliseconds
+      digitalWrite(lampSwitch, HIGH);
     String msg = construnct_json();
     // msg += mesh.getNodeId();
     mesh.sendBroadcast( msg ); //send the data containig myNodeID and state
-    onFlag=0;
+    
     taskSendMessage.setInterval( random( TASK_SECOND * 0.1, TASK_SECOND * 0.5 ));
-    } 
+    }
+     
     else{
       return;
     }  
@@ -54,12 +59,21 @@ void receivedCallback( uint32_t from, String &msg ) {
    //obtaining the received data
     const char* state = doc["state"] ;
     lampState = String(state);
-     receivedID = doc["ID"];
+    int receivedID = doc["ID"];
 
      Serial.print("Lamp node: ");Serial.print(receivedID);
      Serial.print(" is");Serial.println(lampState);
      //call the calc function and turn on the laps where necessary
-     
+     if(lampState.equals("ON")){
+      if(calc(receivedID)){
+        //if true is returned here then turn on the light
+          digitalWrite(lampSwitch, HIGH);
+          lampState = "OFF";
+          timecount = millis();
+          
+        }
+        
+      }
      
 }
 
@@ -75,19 +89,19 @@ void nodeTimeAdjustedCallback(int32_t offset) {
     Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(),offset);
 }
  void IRAM_ATTR isr() {
-     onFlag = 1;
+     onFlag = (onFlag == 0)? 1 : 0;
  }
 
 void setup() {
   Serial.begin(115200);
   //attach interrupt
   pinMode(radarMotionPin, INPUT);
-  attachInterrupt(radarMotionPin, isr, RISING);
+  attachInterrupt(radarMotionPin, isr, CHANGE);
   
   pinMode(controllerInput, INPUT);
   pinMode(dbgLed, OUTPUT);
   pinMode(connectionLed, OUTPUT);
-  
+  pinMode(lampSwitch, OUTPUT);
 //mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE ); // all types on
   mesh.setDebugMsgTypes( ERROR | STARTUP );  // set before init() so that you can see startup messages
 
@@ -99,11 +113,19 @@ void setup() {
 
   userScheduler.addTask( taskSendMessage );
   taskSendMessage.enable();
+  digitalWrite(connectionLed, HIGH);
 }
 
 void loop() {
   // it will run the user scheduler as well
   mesh.update();
+  if(((millis() - timecount) >= waitduration) || (onFlag == 0))
+      {//time count is update in the "receivedCallback" function and
+        //onFlag is update the isr routine with change action...one change sets another resets.
+        digitalWrite(lampSwitch, LOW);
+      }
+
+   
 }
 
 String construnct_json(){
