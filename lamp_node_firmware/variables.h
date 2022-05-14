@@ -10,8 +10,8 @@ int myNodeID = 1; // then 2 then 3........
 
 //int receivedID = 0; //will hold the id received via the mesh broadcast
 
-#define   MESH_PREFIX     "whateverYouLike" //change for different or separate network
-#define   MESH_PASSWORD   "somethingSneaky" //set the same for all nodes in one network
+#define   MESH_PREFIX     "MESHNAME" //change for different or separate network
+#define   MESH_PASSWORD   "MESHPASSWORD" //set the same for all nodes in one network
 #define   MESH_PORT       5555
 
 #define five_lamps 0 //change to 1 to go to 5 lamp mode

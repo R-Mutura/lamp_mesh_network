@@ -1,4 +1,4 @@
-#include <WiFi.h>
+
 #include "painlessMesh.h"
 #include <Arduino_JSON.h>
 
@@ -125,6 +125,7 @@ void loop() {
         //onFlag is update the isr routine with change action...one change sets another resets.
         digitalWrite(lampSwitch, LOW);
       }
+    
 
    
 }
