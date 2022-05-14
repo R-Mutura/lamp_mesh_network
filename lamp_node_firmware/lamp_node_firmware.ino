@@ -1,4 +1,4 @@
-
+#include <WiFi.h>
 #include "painlessMesh.h"
 #include <Arduino_JSON.h>
 
@@ -102,9 +102,10 @@ void setup() {
   pinMode(dbgLed, OUTPUT);
   pinMode(connectionLed, OUTPUT);
   pinMode(lampSwitch, OUTPUT);
+  
 //mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE ); // all types on
   mesh.setDebugMsgTypes( ERROR | STARTUP );  // set before init() so that you can see startup messages
-
+  //Serial.println(a);
   mesh.init( MESH_PREFIX, MESH_PASSWORD, &userScheduler, MESH_PORT );
   mesh.onReceive(&receivedCallback);
   mesh.onNewConnection(&newConnectionCallback);
