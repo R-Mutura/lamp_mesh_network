@@ -1,5 +1,6 @@
 # LAMP MESH NETWORK (NLT2112)
 #### The repo contains all the firmware codes for the project and instructions on how to load them to the hardware
+<img src="https://user-images.githubusercontent.com/20322653/169380834-74515872-feed-4530-92fb-4ae0f10ac75c.png">
 
 ## Requirements
 1) Set up the IDE, for this application you will need to download the Arduino ide [here](https://www.arduino.cc/en/software) if you don't have it already installed for your distributions
