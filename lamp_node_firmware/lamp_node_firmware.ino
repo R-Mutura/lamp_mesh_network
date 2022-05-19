@@ -7,14 +7,14 @@ JSONVar myVar;
 //////////////////////////////////////////////////////////////
 //pin definitions
 #define radarMotionPin  15
-#define controllerInput 32
+#define lampTrigger     32
 #define dbgLed          33
-#define connectionLed   25
-#define lampSwitch      4
+//#define connectionLed   25
+//#define lampSwitch      4
 
 int onFlag       = 0;
 long timecount   = 0;
-int waitduration = 1000; //1 second duration
+int waitduration = 100; //100 milisecond duration
 
 String lampState= "OFF";
 
@@ -29,11 +29,10 @@ Task taskSendMessage( TASK_SECOND * 0.1 , TASK_FOREVER, &sendMessage );
 
 void sendMessage() {
     if(onFlag==1){//only send if the radar is on and stays on for a few miliseconds
-      digitalWrite(lampSwitch, HIGH);
-    String msg = construnct_json();
-    // msg += mesh.getNodeId();
-    mesh.sendBroadcast( msg ); //send the data containig myNodeID and state
+    String msg = construnct_json(); //construct json string 
     
+    mesh.sendBroadcast( msg ); //send the data containig myNodeID and state
+    onFlag = 0;//reset flag so message will be sent only once per trigger
     taskSendMessage.setInterval( random( TASK_SECOND * 0.1, TASK_SECOND * 0.5 ));
     }
      
@@ -46,7 +45,7 @@ void sendMessage() {
 
 // Needed for painless library
 void receivedCallback( uint32_t from, String &msg ) {
-  Serial.printf("startHere: Received from %u msg=%s\n", from, msg.c_str());
+  Serial.printf("Message: Received from %u msg=%s\n", from, msg.c_str());
   //TODO: Deserialize the data to het status and node number
         // compare numbers to see if its within range set on flag to 1 and start a timer for 1-second over flow to be used in the main loop
      StaticJsonDocument<256> doc;
@@ -65,9 +64,9 @@ void receivedCallback( uint32_t from, String &msg ) {
      Serial.print(" is");Serial.println(lampState);
      //call the calc function and turn on the laps where necessary
      if(lampState.equals("ON")){
-      if(calc(receivedID)){
+      if(calc(receivedID)){ //check if we need to turn on this lamp with calc function
         //if true is returned here then turn on the light
-          digitalWrite(lampSwitch, HIGH);
+          digitalWrite(lampTrigger, HIGH);
           lampState = "OFF";
           timecount = millis();
           
@@ -89,19 +88,21 @@ void nodeTimeAdjustedCallback(int32_t offset) {
     Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(),offset);
 }
  void IRAM_ATTR isr() {
-     onFlag = (onFlag == 0)? 1 : 0;
+     onFlag = 1;
+     digitalWrite(lampTrigger, HIGH);
+     timecount = millis();//for time keeping of on duration
  }
 
 void setup() {
   Serial.begin(115200);
   //attach interrupt
   pinMode(radarMotionPin, INPUT);
-  attachInterrupt(radarMotionPin, isr, CHANGE);
+  attachInterrupt(radarMotionPin, isr, RISING);
   
-  pinMode(controllerInput, INPUT);
+  //pinMode(controllerInput, INPUT);
   pinMode(dbgLed, OUTPUT);
-  pinMode(connectionLed, OUTPUT);
-  pinMode(lampSwitch, OUTPUT);
+  //pinMode(connectionLed, OUTPUT);
+  pinMode(lampTrigger, OUTPUT);
   
 //mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE ); // all types on
   mesh.setDebugMsgTypes( ERROR | STARTUP );  // set before init() so that you can see startup messages
@@ -114,16 +115,20 @@ void setup() {
 
   userScheduler.addTask( taskSendMessage );
   taskSendMessage.enable();
-  digitalWrite(connectionLed, HIGH);
+
+  digitalWrite(dbgLed, HIGH);
 }
 
 void loop() {
   // it will run the user scheduler as well
   mesh.update();
-  if(((millis() - timecount) >= waitduration) || (onFlag == 0))
-      {//time count is update in the "receivedCallback" function and
-        //onFlag is update the isr routine with change action...one change sets another resets.
-        digitalWrite(lampSwitch, LOW);
+  if(((millis() - timecount) >= waitduration))
+      {
+        //WAIT DURATION IS 100MS
+        //time count is update in the "receivedCallback" function and
+        //onFlag is update the isr routine with RISING action.
+        
+        digitalWrite(lampTrigger, LOW);
       }
     
 
