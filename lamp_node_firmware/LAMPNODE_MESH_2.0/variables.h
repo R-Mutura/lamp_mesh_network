@@ -6,6 +6,8 @@
      proper operation and sequential lighting
      
 */
+#include "painlessMesh.h"
+ 
 int myNodeID = 1; // then 2 then 3........
 
 //int receivedID = 0; //will hold the id received via the mesh broadcast
@@ -22,16 +24,16 @@ int myNodeID = 1; // then 2 then 3........
 #define xlamp 1
 #endif
 
-int calc(int theID){//pass in the id received from the mesh
+int calc(int theID ){//pass in the id received from the mesh
      //this returns the state to which the lap should either be on or off
-     int rangeMax = (theID + xlamp);
-     int rangeMin = (theID - xlamp);
-     rangeMin = (rangeMin<0)? 0 :rangeMin;
+     int rangeMax = (theID + xlamp );
+     int rangeMin = (theID - xlamp );
+     rangeMin = (rangeMin  <0)? 0 :rangeMin;
      
-     if(myNodeID>=rangeMin && myNodeID<=rangeMax){
+     if(myNodeID  >=rangeMin && myNodeID  <=rangeMax  ){
       return 1;
       }
       else{
-          return 0;
+          return  0;
         }
   }

@@ -5,16 +5,19 @@
 #include "variables.h"
 JSONVar myVar;
 //////////////////////////////////////////////////////////////
+
+#define mydelay 50 // in miliseconds
+int mytime_now = 0; // will be used to calc delat for the send cycle
 //pin definitions
-#define radarMotionPin  15
-#define lampTrigger     32
-#define dbgLed          33
+#define radarMotionPin  14
+#define lampTrigger     15
+#define dbgLed          2
 //#define connectionLed   25
 //#define lampSwitch      4
-
+bool calc_delay = false;
 int onFlag       = 0;
 long timecount   = 0;
-int waitduration = 100; //100 milisecond duration
+int waitduration = 5000; //100 milisecond duration
 
 String lampState= "OFF";
 
@@ -22,51 +25,68 @@ Scheduler userScheduler; // to control your personal task
 painlessMesh  mesh;
 
 // User stub
-void sendMessage() ; // Prototype so PlatformIO doesn't complain
+void sendMessage() ; // Prototype so Platform-IO doesn't complain
 String construnct_json();
 
-Task taskSendMessage( TASK_SECOND * 0.1 , TASK_FOREVER, &sendMessage );
+Task taskSendMessage( TASK_SECOND * 1 , TASK_FOREVER, &sendMessage );
 
 void sendMessage() {
-    if(onFlag==1){//only send if the radar is on and stays on for a few miliseconds
+     
+    if((onFlag == 1) || (digitalRead(radarMotionPin))){//only send if the radar is on and stays on for a few miliseconds
     String msg = construnct_json(); //construct json string 
-    
-    mesh.sendBroadcast( msg ); //send the data containig myNodeID and state
+    Serial.print("sending mesage = ");
+    Serial.println(msg);
+    bool sendingstatus = mesh.sendBroadcast( msg ); //send the data containig myNodeID and state
+    Serial.print("sending status = " );
+    Serial.println(sendingstatus);
     onFlag = 0;//reset flag so message will be sent only once per trigger
-    taskSendMessage.setInterval( random( TASK_SECOND * 0.1, TASK_SECOND * 0.5 ));
+    //taskSendMessage.setInterval( random( TASK_SECOND * 0.01, TASK_SECOND * 0.05 ));
     }
      
-    else{
-      return;
-    }  
+    
 }
    
    
 
 // Needed for painless library
 void receivedCallback( uint32_t from, String &msg ) {
+ //vars to be used in this function
+   String state;
+  int receivedID;
   Serial.printf("Message: Received from %u msg=%s\n", from, msg.c_str());
   //TODO: Deserialize the data to het status and node number
         // compare numbers to see if its within range set on flag to 1 and start a timer for 1-second over flow to be used in the main loop
-     StaticJsonDocument<256> doc;
-     DeserializationError err = deserializeJson(doc, msg);
-    if(err){
-      Serial.print("ERROR: ");
-      Serial.println(err.c_str());
-      return;
-      }  
-   //obtaining the received data
-    const char* state = doc["state"] ;
-    lampState = String(state);
-    int receivedID = doc["ID"];
+ 
+     //desirializing the json data here
+     JSONVar myObject = JSON.parse(msg.c_str());
+          
+     if (JSON.typeof(myObject) == "undefined") 
+     {
+    Serial.println("Parsing input failed!");
+    return;
+     } 
 
-     Serial.print("Lamp node: ");Serial.print(receivedID);
-     Serial.print(" is");Serial.println(lampState);
+       if (myObject.hasOwnProperty("state")) {
+                Serial.print("myObject[\"state\"] = ");
+             state = (const char*) (myObject["state"]);
+                Serial.println(state);
+         }
+       if (myObject.hasOwnProperty("ID")) {
+                Serial.print("myObject[\"ID\"] = ");
+             receivedID = (int) myObject["ID"];
+                Serial.println(receivedID);
+         }  
+
+
+     
      //call the calc function and turn on the laps where necessary
-     if(lampState.equals("ON")){
-      if(calc(receivedID)){ //check if we need to turn on this lamp with calc function
+     if(state.equals("ON")){
+      int lampStatus = calc(receivedID);
+      if(lampStatus == 1){ //check if we need to turn on this lamp with calc function
         //if true is returned here then turn on the light
           digitalWrite(lampTrigger, HIGH);
+          digitalWrite(dbgLed , HIGH);
+          Serial.println("turning on via mesh network");
           lampState = "OFF";
           timecount = millis();
           
@@ -87,9 +107,10 @@ void changedConnectionCallback() {
 void nodeTimeAdjustedCallback(int32_t offset) {
     Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(),offset);
 }
- void IRAM_ATTR isr() {
+void IRAM_ATTR isr() {
      onFlag = 1;
      digitalWrite(lampTrigger, HIGH);
+     digitalWrite(dbgLed,HIGH);
      timecount = millis();//for time keeping of on duration
  }
 
@@ -115,20 +136,24 @@ void setup() {
 
   userScheduler.addTask( taskSendMessage );
   taskSendMessage.enable();
-
+  
   digitalWrite(dbgLed, HIGH);
+  delay(1000);
+  digitalWrite(dbgLed, LOW);
+  
 }
 
 void loop() {
   // it will run the user scheduler as well
   mesh.update();
-  if(((millis() - timecount) >= waitduration))
+  if(((millis() - timecount) >= waitduration) && !(digitalRead(radarMotionPin)))
       {
         //WAIT DURATION IS 100MS
         //time count is update in the "receivedCallback" function and
         //onFlag is update the isr routine with RISING action.
         
         digitalWrite(lampTrigger, LOW);
+        digitalWrite(dbgLed , LOW);;
       }
     
 
@@ -136,11 +161,21 @@ void loop() {
 }
 
 String construnct_json(){
-  if( onFlag == 1 && (digitalRead(radarMotionPin))){
-       myVar["ID"] = myNodeID;
-       myVar["state"] = "ON";
-
-       return JSON.stringify(myVar);
+  //we need to create a json object and serialize it
+  JSONVar myObject;
+  if( onFlag == 1 || (digitalRead(radarMotionPin))){
+       myObject["ID"] = myNodeID;
+       myObject["state"] = "ON";
+       Serial.print("my keys = ");
+        Serial.println(myObject.keys());
+        
+         String jsonString = JSON.stringify(myObject);
+         Serial.print("JSON.stringify(myObject) = ");
+         Serial.println(jsonString);
+         
+       return (jsonString);
   }
+  else{
   return "0";
+  }
 }
