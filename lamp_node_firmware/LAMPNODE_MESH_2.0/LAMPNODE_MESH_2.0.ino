@@ -5,13 +5,17 @@
 #include "variables.h"
 JSONVar myVar;
 //////////////////////////////////////////////////////////////
-
+     #define speedThreshold 10 //speed threshold for sensing is 10km/h
+     #define AVERAGE 4
+     unsigned int doppler_div = 44;
+     unsigned int mysamples[AVERAGE];
+////////////////////////
 #define mydelay 50 // in miliseconds
 int mytime_now = 0; // will be used to calc delat for the send cycle
 //pin definitions
-#define radarMotionPin  14
-#define lampTrigger     15
-#define dbgLed          2
+#define radarMotionPin  15
+#define lampTrigger     32
+#define dbgLed          33
 //#define connectionLed   25
 //#define lampSwitch      4
 bool calc_delay = false;
@@ -32,7 +36,7 @@ Task taskSendMessage( TASK_SECOND * 1 , TASK_FOREVER, &sendMessage );
 
 void sendMessage() {
      
-    if((onFlag == 1) || (digitalRead(radarMotionPin))){//only send if the radar is on and stays on for a few miliseconds
+    if((onFlag == 1) || (calc_speed(radarMotionPin)>speedThreshold)){//only send if the radar is on and stays on for a few miliseconds
     String msg = construnct_json(); //construct json string 
     Serial.print("sending mesage = ");
     Serial.println(msg);
@@ -107,18 +111,18 @@ void changedConnectionCallback() {
 void nodeTimeAdjustedCallback(int32_t offset) {
     Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(),offset);
 }
-void IRAM_ATTR isr() {
-     onFlag = 1;
-     digitalWrite(lampTrigger, HIGH);
-     digitalWrite(dbgLed,HIGH);
-     timecount = millis();//for time keeping of on duration
- }
+//void IRAM_ATTR isr() {
+  //   onFlag = 1;
+    // digitalWrite(lampTrigger, HIGH);
+     //digitalWrite(dbgLed,HIGH);
+    // timecount = millis();//for time keeping of on duration
+ //}
 
 void setup() {
   Serial.begin(115200);
   //attach interrupt
   pinMode(radarMotionPin, INPUT);
-  attachInterrupt(radarMotionPin, isr, RISING);
+  //attachInterrupt(radarMotionPin, isr, RISING);
   
   //pinMode(controllerInput, INPUT);
   pinMode(dbgLed, OUTPUT);
@@ -146,14 +150,26 @@ void setup() {
 void loop() {
   // it will run the user scheduler as well
   mesh.update();
-  if(((millis() - timecount) >= waitduration) && !(digitalRead(radarMotionPin)))
+
+  float speed = calc_speed(radarMotionPin);
+      if(speed >= speedThreshold)//check if the sensed speed is greater than 5kmh
+         {
+            onFlag = 1;
+            digitalWrite(lampTrigger, HIGH);
+            digitalWrite(dbgLed,HIGH);
+            timecount = millis();
+         } 
+
+      
+  if(((millis() - timecount) >= waitduration) && (calc_speed(radarMotionPin)<speedThreshold))
       {
         //WAIT DURATION IS 100MS
         //time count is update in the "receivedCallback" function and
         //onFlag is update the isr routine with RISING action.
         
         digitalWrite(lampTrigger, LOW);
-        digitalWrite(dbgLed , LOW);;
+        digitalWrite(dbgLed , LOW);
+        onFlag = 0; //set the on flag low if all is low
       }
     
 
@@ -163,7 +179,7 @@ void loop() {
 String construnct_json(){
   //we need to create a json object and serialize it
   JSONVar myObject;
-  if( onFlag == 1 || (digitalRead(radarMotionPin))){
+  if( onFlag == 1 || (calc_speed(radarMotionPin)>=speedThreshold)){
        myObject["ID"] = myNodeID;
        myObject["state"] = "ON";
        Serial.print("my keys = ");
@@ -178,4 +194,52 @@ String construnct_json(){
   else{
   return "0";
   }
+}
+
+
+float calc_speed(int PIN_NUMBER)
+{
+
+     unsigned int x;
+     
+
+    
+     pulseIn(PIN_NUMBER, HIGH);
+      unsigned int pulse_length = 0;
+      for (x = 0; x < AVERAGE; x++)
+       {
+          pulse_length = pulseIn(PIN_NUMBER, HIGH); 
+          pulse_length += pulseIn(PIN_NUMBER, LOW);    
+          mysamples[x] =  pulse_length;
+       }
+      
+      bool mysamples_ok = true;
+      unsigned int nbPulsesTime = mysamples[0];
+        for (x = 1; x < AVERAGE; x++)
+        {
+          nbPulsesTime += mysamples[x];
+          if ((mysamples[x] > mysamples[0] * 2) || (mysamples[x] < mysamples[0] / 2))
+          {
+            mysamples_ok = false;
+          }
+        }
+
+    if (mysamples_ok)
+    {
+      unsigned int Ttime = nbPulsesTime / AVERAGE;
+      unsigned int Freq = 1000000 / Ttime;
+      Serial.print("\r\n");
+      Serial.print(Freq);
+      Serial.print("Hz : ");
+      Serial.print(Freq/doppler_div);
+      Serial.print("km/h\r\n");
+
+        return (Freq/doppler_div);
+
+     }      
+    else{
+         Serial.print(".");      
+    }      
+     return 0;
+   
 }
